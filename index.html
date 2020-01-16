@@ -6,12 +6,12 @@
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
     <script src="gameObjects.js"></script>
-    <script src="levelInfo.js"></script>
+    <script src="levelData.js"></script>
     <script>
 
         var onTitle = true;
         var currLevel = 0;
-        man = new Picture({x:levels[currLevel].startX, y:levels[currLevel].startY, w:38.071, h:100}, "Resources/man.png", true);
+        var man = new Picture({x:levels[currLevel].startX, y:levels[currLevel].startY, w:38.071, h:100}, "Resources/man.png", true);
         var picts = {};
         var buttons = [createButton("", 0, 0, 0, 0, function () {})];
         var life;
@@ -48,7 +48,11 @@
                 man.pictInfo.x = levels[currLevel].startX;
                 man.pictInfo.y = levels[currLevel].startY;
                 man.velocity = 0;
-                man.pict.src = "Resources/man.png";
+                if (levels[currLevel].facingRight) {
+                    man.pict.src = "Resources/man.png";
+                } else {
+                    man.pict.src = "Resources/manLeft.png";
+                }
                 life = levels[currLevel].startLives;
                 picts = levels[currLevel].gameObjectsFunction();
                 canBomb = true;
@@ -61,14 +65,16 @@
             }
         }
 
-
+        //Updates gameplay on screen based on what keys are pressed
         function updateKeys() {
+            //ends text scenes when space bar is pressed
             if (keycode[32] && levels[currLevel].type == "text" && canPress) {
                 skipLevel();
                 canPress = false;
                 setTimeout(function(){canPress=true}, 500)
             }
 
+            //moves to the next dialogue text when space bar is pressed
             if (keycode[32] && levels[currLevel].type == "dialogue" && canPress) {
                 currDialogue+=1;
                 if (currDialogue == levels[currLevel].text.length) {
@@ -78,11 +84,13 @@
                 setTimeout(function(){canPress=true}, 500)
             }
 
-            if((keycode[87]) && !canMove(man, 0, 5)) {//makes the person jump if he can
+            //makes the person jump if he can
+            if((keycode[87]) && !canMove(man, 0, 5)) {
                 man.velocity = -7;
             }
 
-            if((keycode[65]) && canMove(man, -4, 0) && levels[currLevel].type != "Dialogue") {//coordinates move left when pressing a and within boundaries
+            //coordinates move left when pressing a and within boundaries
+            if((keycode[65]) && canMove(man, -4, 0) && levels[currLevel].type != "Dialogue") {
                 man.pictInfo.x -= 4;
                 if (canBomb) {
                     man.pict.src = "Resources/manLeft.png";
@@ -91,7 +99,8 @@
                 }
             }
 
-            if((keycode[68]) && canMove(man, 4, 0)  && levels[currLevel].type != "Dialogue" ) {//coordinates move right when pressing d and within boundaries
+            //coordinates move right when pressing d and within boundaries
+            if((keycode[68]) && canMove(man, 4, 0)  && levels[currLevel].type != "Dialogue" ) {
                 man.pictInfo.x += 4;
                 if (canBomb) {
                     man.pict.src = "Resources/man.png";
@@ -100,7 +109,8 @@
                 }
             }
 
-            if ((keycode[38]||keycode[39]||keycode[40]||keycode[37]) && canBomb) {//throws a bomb
+            //throws a bomb
+            if ((keycode[38]||keycode[39]||keycode[40]||keycode[37]) && canBomb) {
                 if (man.pict.src.includes("Resources/man.png")) {
                     man.pict.src = "Resources/manBomb.png";
                 } else {
@@ -178,10 +188,6 @@
                     if (pict.checkCollision(picts.sliders[i]) && !(pict.pict.src.indexOf("man")!==-1 && changeX!== 0 && (pict.pictInfo.y+pict.pictInfo.h-2.75<=picts.sliders[i].pictInfo.y))) {
                         pict.pictInfo.x -= changeX;
                         pict.pictInfo.y -= changeY;
-//                        if (pict.pict.src.indexOf("man")!==-1 && changeX!== 0 && (pict.pictInfo.x+pict.pictInfo.h-2.75)) {
-//                            console.log(pict.pictInfo.y+pict.pictInfo.h-2.75<=picts.sliders[i].pictInfo.y);
-//                            console.log("Person Y: "+(pict.pictInfo.x+pict.pictInfo.h-2.75));
-//                            console.log("Slider Y: "+picts.sliders[i].pictInfo.y)                        }
                         return false;
                     }
                 }
@@ -223,11 +229,10 @@
 
         //draws the title screen at the start
         function drawTitle() {
-            //0, 0, window.innerWidth, window.innerHeight
             var background = new Picture({x:0, y:0, w:800, h:700}, "Resources/titleScreen1.png", true);
             background.drawPict();
             drawText("Bomber Boy", 200, 330, 60);
-            buttons[0] = createButton("New Game", 270, 405, 40, 230, function () {currLevel=1; onTitle=false; time=0; levelTime = 0;
+            buttons[0] = createButton("New Game", 270, 405, 40, 230, function () {currLevel=0; onTitle=false; time=0; levelTime = 0;
                 document.getElementById('myCanvas').removeEventListener('click', buttons[0].func); startLevel();});
             buttons[0].drawPict();
         }
@@ -235,19 +240,19 @@
         //creates the animation, drawing each picture and seeing if the player won or lost
         function animate() {
             a = requestAnimationFrame(animate);
-            if (onTitle) {
+            if (onTitle) { //title screen
                 drawTitle();
-            } else if (levels[currLevel].type == "text") {
+            } else if (levels[currLevel].type == "text") { //text scenes
                 updateKeys();
                 drawTextBackground();
                 for (var i=0; i<levels[currLevel].text.length; i++) {
                     drawTextCentered(levels[currLevel].text[i][0], levels[currLevel].text[i][1], levels[currLevel].text[i][2], "ffb900")
                 }
-            } else if (levels[currLevel].type == "dialogue") {
+            } else if (levels[currLevel].type == "dialogue") { //dialogue scenes
                 updateKeys();
                 drawDialogueBackground();
-                drawTextCentered(levels[currLevel].text[currDialogue][0], 400, 18);
-            } else if (levels[currLevel].type == "puzzle") {
+                drawTextCentered(levels[currLevel].text[currDialogue][0], levels[currLevel].textHeight, 18);
+            } else if (levels[currLevel].type == "puzzle") { //puzzle levels
                 drawBackground();
                 for (var i=0; i<levels[currLevel].text.length; i++) {
                     drawText(levels[currLevel].text[i][0], levels[currLevel].text[i][1], levels[currLevel].text[i][2], levels[currLevel].text[i][3])
@@ -265,13 +270,12 @@
                 drawArray(picts.levers);
                 checkLife(); //sees if lost
                 if (man.checkCollision(picts.chest)){ //sees if won
-                    currLevel+=1;
-                    levelTime = 0;
-                    startLevel();
+                    skipLevel();
                 }
             }
         }
 
+        //moves to the next level
         function skipLevel() {
             currLevel+=1;
             levelTime = 0;
@@ -284,23 +288,41 @@
             }
         }
 
+        //draws a black screen background
         function drawTextBackground() {
             drawRects('000000', '000000', 0, 0, window.innerWidth, window.innerHeight);
         }
 
+        //draws the background for dialogue scenes and the people talking
         function drawDialogueBackground() {
-            var background = new Picture({x:0, y:0, w:800, h:700}, "Resources/bathroom.png", true);
-            background.drawPict();
-            if (levels[currLevel].text[currDialogue][1] == 0) {
-                man.pict.src = "Resources/manGlow.png";
-                oldMan = new Picture({x:levels[currLevel].oldStartX, y:levels[currLevel].oldStartY, w:38.071, h:100}, "Resources/oldMan.png", true);
-            } else {
-                man.pict.src = "Resources/man.png";
-                oldMan = new Picture({x:levels[currLevel].oldStartX, y:levels[currLevel].oldStartY, w:38.071, h:100}, "Resources/oldManGlow.png", true);
+            if (levels[currLevel].isBartholemew) {//dialogue with Bart
+                var background = new Picture({x:0, y:0, w:800, h:700}, "Resources/bathroom.png", true);
+                background.drawPict();
+                if (levels[currLevel].text[currDialogue][1] == 0) {
+                    man.pict.src = "Resources/manGlow.png";
+                    oldMan = new Picture({x:levels[currLevel].secondX, y:levels[currLevel].secondY, w:38.071, h:100}, "Resources/oldMan.png", true);
+                } else {
+                    man.pict.src = "Resources/man.png";
+                    oldMan = new Picture({x:levels[currLevel].secondX, y:levels[currLevel].secondY, w:38.071, h:100}, "Resources/oldManGlow.png", true);
+                }
+                var ctx = document.getElementById('myCanvas').getContext("2d");
+                ctx.drawImage(man.pict, man.pictInfo.x, man.pictInfo.y, man.pictInfo.w, man.pictInfo.h);
+                oldMan.drawPict();
+            } else {//dialogue with Reginald
+                var background = new Picture({x:0, y:0, w:800, h:700}, "Resources/desert.png", true);
+                background.drawPict();
+                if (levels[currLevel].text[currDialogue][1] == 0) {
+                    man.pict.src = "Resources/manLeft.png";
+                    shortMan = new Picture({x:levels[currLevel].secondX, y:levels[currLevel].secondY, w:38.071, h:100}, "Resources/reginald.png", true);
+                } else {
+                    man.pict.src = "Resources/manLeft.png";
+                    shortMan = new Picture({x:levels[currLevel].secondX, y:levels[currLevel].secondY, w:38.071, h:100}, "Resources/reginald.png", true);
+                }
+                var ctx = document.getElementById('myCanvas').getContext("2d");
+                ctx.drawImage(man.pict, man.pictInfo.x, man.pictInfo.y, man.pictInfo.w, man.pictInfo.h);
+                shortMan.drawPict();
             }
-            var ctx = document.getElementById('myCanvas').getContext("2d");
-            ctx.drawImage(man.pict, man.pictInfo.x, man.pictInfo.y, man.pictInfo.w, man.pictInfo.h);
-            oldMan.drawPict();
+
         }
 
         //draws the background grass and the current level

@@ -1,6 +1,3 @@
-/**
- * Created by milas6582 on 4/3/2017.
- */
 //Module containing all gameplay classes
 
 class Picture {
