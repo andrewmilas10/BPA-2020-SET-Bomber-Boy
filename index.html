@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game</title>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+    <script src="gameObjects.js"></script>
+    <script src="levelInfo.js"></script>
+    <script>
+
+        var onTitle = true;
+        var currLevel = 0;
+        man = new Picture({x:levels[currLevel].startX, y:levels[currLevel].startY, w:38.071, h:100}, "Resources/man.png", true);
+        var picts = {};
+        var buttons = [createButton("", 0, 0, 0, 0, function () {})];
+        var life;
+        var canBomb;
+        var time = 0;
+        var levelTime = 0;
+        var currDialogue = 0;
+        var canPress = true;
+        countInterval = setInterval(function () {time+=1; levelTime+=1}, 1000);
+
+        //updates the coordinates of the man appropriately and then draws him on screen
+        man.drawPict = function () {
+            updateKeys();
+
+            if (canMove(man, 0, man.velocity)) {//makes the player fall or jump if can
+                man.pictInfo.y += man.velocity;
+                man.velocity += .25;
+
+            } else {//otherwise makes the player not move vertically
+                man.velocity = 0;
+            }
+
+            //draws the man onscreen
+            var ctx = document.getElementById('myCanvas').getContext("2d");
+            ctx.drawImage(man.pict, man.pictInfo.x, man.pictInfo.y, man.pictInfo.w, man.pictInfo.h);
+        };
+
+        //sets pictures to be appropriate for the start of the current level, takes information from variable levels
+        function startLevel() {
+            var old_element = document.getElementById("myCanvas");
+            var new_element = old_element.cloneNode(true);
+            old_element.parentNode.replaceChild(new_element, old_element);
+            if (levels[currLevel].type == "puzzle") {
+                man.pictInfo.x = levels[currLevel].startX;
+                man.pictInfo.y = levels[currLevel].startY;
+                man.velocity = 0;
+                man.pict.src = "Resources/man.png";
+                life = levels[currLevel].startLives;
+                picts = levels[currLevel].gameObjectsFunction();
+                canBomb = true;
+            } else if (levels[currLevel].type == "dialogue") {
+                man.pictInfo.x = levels[currLevel].startX;
+                man.pictInfo.y = levels[currLevel].startY;
+                man.velocity = 0;
+                life = levels[currLevel].startLives;
+                currDialogue = 0;
+            }
+        }
+
+
+        function updateKeys() {
+            if (keycode[32] && levels[currLevel].type == "text" && canPress) {
+                skipLevel();
+                canPress = false;
+                setTimeout(function(){canPress=true}, 500)
+            }
+
+            if (keycode[32] && levels[currLevel].type == "dialogue" && canPress) {
+                currDialogue+=1;
+                if (currDialogue == levels[currLevel].text.length) {
+                    skipLevel();
+                }
+                canPress = false;
+                setTimeout(function(){canPress=true}, 500)
+            }
+
+            if((keycode[87]) && !canMove(man, 0, 5)) {//makes the person jump if he can
+                man.velocity = -7;
+            }
+
+            if((keycode[65]) && canMove(man, -4, 0) && levels[currLevel].type != "Dialogue") {//coordinates move left when pressing a and within boundaries
+                man.pictInfo.x -= 4;
+                if (canBomb) {
+                    man.pict.src = "Resources/manLeft.png";
+                } else {
+                    man.pict.src = "Resources/manBombLeft.png";
+                }
+            }
+
+            if((keycode[68]) && canMove(man, 4, 0)  && levels[currLevel].type != "Dialogue" ) {//coordinates move right when pressing d and within boundaries
+                man.pictInfo.x += 4;
+                if (canBomb) {
+                    man.pict.src = "Resources/man.png";
+                } else {
+                    man.pict.src = "Resources/manBomb.png";
+                }
+            }
+
+            if ((keycode[38]||keycode[39]||keycode[40]||keycode[37]) && canBomb) {//throws a bomb
+                if (man.pict.src.includes("Resources/man.png")) {
+                    man.pict.src = "Resources/manBomb.png";
+                } else {
+                    man.pict.src = "Resources/manBombLeft.png";
+                }
+
+                setTimeout(function(){if (man.pict.src.includes("Resources/manBomb.png")) {
+                                        man.pict.src = "Resources/man.png";
+                                    } else {
+                                        man.pict.src = "Resources/manLeft.png";
+                                        man.pict.src = "Resources/manLeft.png";
+                                    }}, 500);
+
+                //throws a bomb to the right if d is being pressed
+                bombIfShould(39, {x: man.pictInfo.x+30, y: man.pictInfo.y+25, w: 45, h:45}, 7, -4);
+                if (!keycode[39]) {//if d isn't pressed
+                    //throws a bomb to the left if a is being pressed
+                    bombIfShould(37, {x: man.pictInfo.x-15, y: man.pictInfo.y+25, w: 45, h:45}, -7, -4);
+                    if (!keycode[37]) {//if a isn't pressed
+                        //throws a bomb up if pressing w
+                        bombIfShould(38, {x: man.pictInfo.x, y: man.pictInfo.y+25, w: 45, h:45}, 0, -11);
+                        if (!keycode[38]) {// if w isn't being pressed
+                            //throws a bomb down in e is being pressed (which we already know is pressed)
+                            bombIfShould(40, {x: man.pictInfo.x, y: man.pictInfo.y+25, w: 45, h:45}, 0, 0);
+                        }
+                    }
+                }
+            }
+
+            if (keycode[82]) { //restarts the level if pressing r
+                startLevel();
+            }
+        }
+
+        //creates a bomb if the desired key is being pressed
+        function bombIfShould(key, pictInfo, changeX, changeY) {
+            if (keycode[key]) {
+                picts.bombs.push(new Bomb(pictInfo, changeX, changeY));
+
+                //can't throw a bomb for half a second
+                canBomb = false;
+                setTimeout(function(){ canBomb = true; }, 500)
+            }
+        }
+
+
+        //starts the animation when the screen loads
+        function initialize() {
+            animate();
+        }
+
+        //checks to see if a picture can move a specific amount of pixels
+        function canMove(pict, changeX, changeY) {
+            //temporarily changes the picture's coordinates
+            pict.pictInfo.x += changeX;
+            pict.pictInfo.y += changeY;
+
+            if (pict.pictInfo.x <= 5 || pict.pictInfo.x + pict.pictInfo.w >= 795 ||// returns false if out of boundaries
+                pict.pictInfo.y <= 0 || pict.pictInfo.y + pict.pictInfo.h >= 600) {
+                pict.pictInfo.x -= changeX;
+                pict.pictInfo.y -= changeY;
+                return false;
+            }
+
+            for (var i = 0; i < picts.walls.length; i++) { //returns false if colliding with a wall
+                if (pict.checkCollision(picts.walls[i])) {
+                    pict.pictInfo.x -= changeX;
+                    pict.pictInfo.y -= changeY;
+                    return false;
+                }
+            }
+
+            if (pict.pict.src.indexOf("slider")===-1) {
+                for (var i = 0; i < picts.sliders.length; i++) { //returns false if colliding with a slider
+                    if (pict.checkCollision(picts.sliders[i]) && !(pict.pict.src.indexOf("man")!==-1 && changeX!== 0 && (pict.pictInfo.y+pict.pictInfo.h-2.75<=picts.sliders[i].pictInfo.y))) {
+                        pict.pictInfo.x -= changeX;
+                        pict.pictInfo.y -= changeY;
+//                        if (pict.pict.src.indexOf("man")!==-1 && changeX!== 0 && (pict.pictInfo.x+pict.pictInfo.h-2.75)) {
+//                            console.log(pict.pictInfo.y+pict.pictInfo.h-2.75<=picts.sliders[i].pictInfo.y);
+//                            console.log("Person Y: "+(pict.pictInfo.x+pict.pictInfo.h-2.75));
+//                            console.log("Slider Y: "+picts.sliders[i].pictInfo.y)                        }
+                        return false;
+                    }
+                }
+            }
+
+            if (man !== pict) { //returns false if colliding with a lever and the picture isn't the player
+                for (var i=0; i<picts.levers.length; i++) {
+                    if (pict.checkCollision(picts.levers[i])) {
+                        pict.pictInfo.x -= changeX;
+                        pict.pictInfo.y -= changeY;
+                        return false;
+                    }
+                }
+            }
+
+            //resets coordinates
+            pict.pictInfo.x -= changeX;
+            pict.pictInfo.y -= changeY;
+            return true
+        }
+
+        isStopped = false;
+
+        //stops the animation
+        function stopAnimation() {
+            if (!isStopped) {
+                cancelAnimationFrame(a);
+                isStopped = true;
+            }
+        }
+
+        //starts the animation
+        function startAnimation() {
+            if (isStopped) {
+                animate();
+                isStopped = false;
+            }
+        }
+
+        //draws the title screen at the start
+        function drawTitle() {
+            //0, 0, window.innerWidth, window.innerHeight
+            var background = new Picture({x:0, y:0, w:800, h:700}, "Resources/titleScreen1.png", true);
+            background.drawPict();
+            drawText("Bomber Boy", 200, 330, 60);
+            buttons[0] = createButton("New Game", 270, 405, 40, 230, function () {currLevel=1; onTitle=false; time=0; levelTime = 0;
+                document.getElementById('myCanvas').removeEventListener('click', buttons[0].func); startLevel();});
+            buttons[0].drawPict();
+        }
+
+        //creates the animation, drawing each picture and seeing if the player won or lost
+        function animate() {
+            a = requestAnimationFrame(animate);
+            if (onTitle) {
+                drawTitle();
+            } else if (levels[currLevel].type == "text") {
+                updateKeys();
+                drawTextBackground();
+                for (var i=0; i<levels[currLevel].text.length; i++) {
+                    drawTextCentered(levels[currLevel].text[i][0], levels[currLevel].text[i][1], levels[currLevel].text[i][2], "ffb900")
+                }
+            } else if (levels[currLevel].type == "dialogue") {
+                updateKeys();
+                drawDialogueBackground();
+                drawTextCentered(levels[currLevel].text[currDialogue][0], 400, 18);
+            } else if (levels[currLevel].type == "puzzle") {
+                drawBackground();
+                for (var i=0; i<levels[currLevel].text.length; i++) {
+                    drawText(levels[currLevel].text[i][0], levels[currLevel].text[i][1], levels[currLevel].text[i][2], levels[currLevel].text[i][3])
+                }
+
+                drawLife();
+                picts.chest.drawPict();
+                drawArray(picts.springs);
+                man.drawPict();
+                drawArray(picts.walls);
+                drawArray(picts.saws);
+                drawArray(picts.bombs);
+                drawArray(picts.sliders);
+                drawArray(picts.launchers);
+                drawArray(picts.levers);
+                checkLife(); //sees if lost
+                if (man.checkCollision(picts.chest)){ //sees if won
+                    currLevel+=1;
+                    levelTime = 0;
+                    startLevel();
+                }
+            }
+        }
+
+        function skipLevel() {
+            currLevel+=1;
+            levelTime = 0;
+            startLevel();
+        }
+
+        function drawArray(array) { //draw all the pictures in an array
+            for (var i=0; i<array.length; i++) {
+                array[i].drawPict()
+            }
+        }
+
+        function drawTextBackground() {
+            drawRects('000000', '000000', 0, 0, window.innerWidth, window.innerHeight);
+        }
+
+        function drawDialogueBackground() {
+            var background = new Picture({x:0, y:0, w:800, h:700}, "Resources/bathroom.png", true);
+            background.drawPict();
+            if (levels[currLevel].text[currDialogue][1] == 0) {
+                man.pict.src = "Resources/manGlow.png";
+                oldMan = new Picture({x:levels[currLevel].oldStartX, y:levels[currLevel].oldStartY, w:38.071, h:100}, "Resources/oldMan.png", true);
+            } else {
+                man.pict.src = "Resources/man.png";
+                oldMan = new Picture({x:levels[currLevel].oldStartX, y:levels[currLevel].oldStartY, w:38.071, h:100}, "Resources/oldManGlow.png", true);
+            }
+            var ctx = document.getElementById('myCanvas').getContext("2d");
+            ctx.drawImage(man.pict, man.pictInfo.x, man.pictInfo.y, man.pictInfo.w, man.pictInfo.h);
+            oldMan.drawPict();
+        }
+
+        //draws the background grass and the current level
+        function drawBackground() {
+            drawRects('00EEFF', '00EEFF', 0, 0, window.innerWidth, window.innerHeight);
+            drawRects('00ff00', '00ff00', 0, 600, 800, 100);
+            if (currLevel === 0) {
+                picts.buttons[0].drawPict();
+            }
+            else {
+                drawText("Level: " + currLevel, 640, 690, 40);
+                drawText("Time: " + returnTime(time), 20, 650, 40);
+                drawText("Level Time: " + returnTime(levelTime), 20, 690, 40);
+            }
+        }
+
+        function returnTime(time) {
+            if (time>=3600) {
+
+                return ""+Math.floor(time/3600)+":"+stringTime(Math.floor(time%3600/60))+":"+stringTime(time%60);
+            }
+            else if (time >= 60) {
+                return ""+Math.floor(time/60)+":"+stringTime(time%60);
+            }
+            else {
+                return stringTime(time)
+            }
+        }
+
+        function stringTime(num) {
+            if (num<10) {
+                return "0"+num
+            }
+            return ""+num
+        }
+
+        //checks if the player lost
+        function checkLife() {
+            for (k=0; k<picts.launchers.length; k++) { //checks if hit by a bullet
+                for (i = picts.launchers[k].bullets.length-1; i >= 0; i--) {
+                    if (man.checkCollision(picts.launchers[k].bullets[i]) && picts.launchers[k].bullets[i].pict.src.indexOf("Resources/bullet.png")>=0) {
+                        explode(picts.launchers[k].bullets[i], picts.launchers[k].bullets);
+                        life -= 1;
+                    }
+                }
+            }
+
+            for (i=0; i<picts.saws.length; i++) { //checks if hit by a saw
+                if (man.checkCollision(picts.saws[i]) && picts.saws[i].canHit) {
+                    picts.saws[i].canHit = false;
+                    setTimeout(function(saw){ saw.canHit = true; }, 1000, picts.saws[i]);
+                    life -= 1;
+                }
+            }
+
+            if (life <= 0) {//player lost
+                startLevel();
+            }
+        }
+
+        function drawLife() {
+            //draw hearts on the screen
+            for (i=0; i<life; i++) {
+                picts.heart.pictInfo.x = 750-40*i; //sets x coordinate of the heart more and more left so they don't overlap
+                picts.heart.drawPict();
+            }
+        }
+
+        var keycode = {}; //keeps track of which keys are being pressed or not
+        $(document).keydown(function(event) { //jQuery code to recognize a keydown event
+            keycode[event.keyCode || event.which] = true;});
+        $(document).keyup(function(event){
+            keycode[event.keyCode || event.which] = false;
+        });
+
+        // draws given text on the canvas
+        function drawText(text, x, y, size, color = '000000') {
+            var ctx = document.getElementById('myCanvas').getContext("2d");
+            ctx.fillStyle = "#"+color;
+            ctx.font = size+"px Arial";
+            ctx.fillText(text, x, y);
+        }
+
+        // draws given text on the canvas
+        function drawTextCentered(text, y, size, color = '000000') {
+            var ctx = document.getElementById('myCanvas').getContext("2d");
+            ctx.fillStyle = "#"+color;
+            ctx.font = size+"px Arial";
+            ctx.fillText(text, 400, y);
+            ctx.textAlign = "center"
+        }
+
+        //draws a rectangle given its color, border color, top-left corner coordinates, width, and height
+        function drawRects(color, outlineColor, startX, startY, width, height){
+            var ctx = document.getElementById("myCanvas").getContext("2d");
+            ctx.fillStyle = "#"+color;
+            ctx.fillRect( startX, startY, width, height);
+            ctx.fillRect( startX, startY, width, height);
+            ctx.strokeStyle = "#"+outlineColor;
+            ctx.strokeRect( startX, startY, width, height);
+        }
+        </script>
+</head>
+
+<body onload="initialize()">
+<canvas id="myCanvas" width="800" height="700"
+        style="border:1px solid #000000;">
+</canvas>
+<button type="button" onclick="startAnimation()">start animation</button>
+<button type="button" onclick="stopAnimation()">stop animation</button>
+<button type="button" onclick="skipLevel()">skip scene/level</button>
+
+<script>
+    //checks for the mouse's position (took from stack overflow),
+    function getMousePos(evt) {
+        var canvas = document.getElementById('myCanvas');
+        var rect = canvas.getBoundingClientRect();
+        return {
+            x: Math.round((evt.clientX-rect.left)/(rect.right-rect.left)*canvas.width),
+            y: Math.round((evt.clientY-rect.top)/(rect.bottom-rect.top)*canvas.height)
+        };
+    }
+
+    //finds new coordinates each time the mouse moves
+    document.getElementById('myCanvas').addEventListener('mousemove', function(evt) {
+        mousePos = getMousePos(evt);
+    }, false);
+
+    var mousePos = {x: 0, y:0};
+
+////    alerts mouse's position when mouse clicks (helps when fixing bugs/designing levels)
+//    function printMouse() {
+//        alert(mousePos.x +" "+ mousePos.y)
+//    }
+//
+//    document.getElementById('myCanvas').addEventListener('click', printMouse);
+
+</script>
+</body>
+</html>
